@@ -1,0 +1,33 @@
+{
+  "name": "mc-updater",
+  "version": "0.0.0",
+  "description": "Update minecraft mods",
+  "main": "dist/bin/mc-updater.js",
+  "scripts": {
+    "build": "npm run clean && tsc && [ -d dist/bin ] && chmod -f +x dist/bin/* || exit 0",
+    "clean": "rm -rf dist",
+    "lint": "eslint src/*",
+    "lint:fix": "eslint --fix src/*",
+    "prepublish": "npm run build",
+    "start": "ts-node src",
+    "start:debug": "node --inspect -r ts-node/register src",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "watch": "nodemon -w lib -w src -w bin -e ts -x npm run start",
+    "watch:debug": "nodemon -w lib -w src -w bin -e ts -x npm run start:debug"
+  },
+  "author": "Ross Hadden",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/axios": "^0.14.0",
+    "@types/lodash": "^4.14.149",
+    "@types/node": "^13.1.8",
+    "eslint": "^6.8.0",
+    "ts-node": "^8.6.2",
+    "typescript": "^3.7.5"
+  },
+  "types": "dist/src/index.d.ts",
+  "dependencies": {
+    "axios": "^0.19.1",
+    "lodash": "^4.17.15"
+  }
+}
