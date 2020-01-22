@@ -61,6 +61,7 @@ export default class Emcee {
 	}
 
 	async getFiles() {
+		console.log('getting mod files');
 		return (await fsp.readdir('.'))
 			.filter((file) => file.endsWith('.jar'));
 	}
@@ -80,12 +81,12 @@ export default class Emcee {
 	}
 
 	async process(file: string) {
-		console.log('updating', file);
+		console.log(`processing ${file}`);
 
-		// get mod info
+		console.log('getting mod info');
 		const modInfo: ModInfo = await this.exec(`unzip -p ${file} mcmod.info`);
 
-		// search API
+		console.log(`searching for ${modInfo.name}`);
 		const res = await this.curse.get('/addon/search', {
 			headers: {
 				'Content-Type': 'application/x-www-form-urlencoded',
@@ -115,7 +116,7 @@ export default class Emcee {
 			);
 		});
 
-		// find filename match (after stripping remote data as well)
+		console.log('finding filename match');
 		const mod = this.findMatch(results, file);
 		if (!mod) throw new Error(`No match found for ${file}`);
 
@@ -130,6 +131,7 @@ export default class Emcee {
 		const modFile = this.getModFile(mod);
 		const url = await this.getUrl(mod, modFile);
 
+		console.log(`downloading ${url} to ${modFile.projectFileName}`);
 		const writer = fs.createWriteStream(modFile.projectFileName);
 		const download = await axios.get(url, { responseType: 'stream' });
 		download.data.pipe(writer);
@@ -146,6 +148,7 @@ export default class Emcee {
 	}
 
 	async getUrl(mod: Mod, modFile: ModFile): Promise<string> {
+		console.log('getting mod file url');
 		const res = await this.curse.get(`/addon/${mod.id}/file/${modFile.projectFileId}`);
 		return res.data.downloadUrl;
 	}
