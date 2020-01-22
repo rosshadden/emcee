@@ -1,7 +1,31 @@
 import _ from 'lodash';
 import axios from 'axios';
+import fs, { promises as fsp } from 'fs';
 import { exec } from 'child_process';
-import { promises as fsp } from 'fs';
+
+interface ModLatestFile {
+	id: number;
+	displayName: string;
+	fileName: string;
+	downloadUrl: string;
+}
+
+interface ModFile {
+	gameVersion: string;
+	projectFileId: number;
+	projectFileName: string;
+	fileType: number;
+	gameVersionFlavor: string;
+}
+
+interface Mod {
+	id: number;
+	name: string;
+	summary: string;
+	slug: string;
+	latestFiles: Array<ModLatestFile>;
+	gameVersionLatestFiles: Array<ModFile>;
+}
 
 interface ModInfo {
 	modid: string;
@@ -28,10 +52,10 @@ export default class Emcee {
 		;
 	}
 
-	findMatch(results: Array<any>, file: string) {
+	findMatch(results: Array<Mod>, file: string): Mod {
 		const stripped = this.strip(file);
 		return results.find((result) => {
-			const match = result.gameVersionLatestFiles.find(({ gameVersion }) => gameVersion === this.version);
+			const match = this.getModFile(result);
 			return match && this.strip(match.projectFileName) === stripped;
 		});
 	}
@@ -59,7 +83,7 @@ export default class Emcee {
 		console.log('updating', file);
 
 		// get mod info
-		const mod: ModInfo = await this.exec(`unzip -p ${file} mcmod.info`);
+		const modInfo: ModInfo = await this.exec(`unzip -p ${file} mcmod.info`);
 
 		// search API
 		const res = await this.curse.get('/addon/search', {
@@ -72,36 +96,58 @@ export default class Emcee {
 				gameVersion: this.version,
 				index: 0,
 				pageSize: 25,
-				searchFilter: mod.name,
+				searchFilter: modInfo.name,
 				sort: 0,
 			}
 		});
 
-		const results = res.data.map((result: any) => {
+		const results: Array<Mod> = res.data.map((result: any) => {
 			return _.pick(
 				result,
 				[
 					'id',
 					'name',
 					'summary',
-					'latestFiles',
 					'slug',
+					'latestFiles',
 					'gameVersionLatestFiles',
 				]
 			);
 		});
 
 		// find filename match (after stripping remote data as well)
-		const match = this.findMatch(results, file);
-		if (!match) throw new Error(`No match found for ${file}`);
+		const mod = this.findMatch(results, file);
+		if (!mod) throw new Error(`No match found for ${file}`);
 
-		console.log(match);
+		// download mod
+		await this.downloadMod(mod);
 
-		// TODO: get download url for latest file of given (read: hardcoded) version
+		// remove old mod
+		await fsp.unlink(file);
+	}
 
-		// TODO: download to mods dir
+	async downloadMod(mod: Mod): Promise<void> {
+		const modFile = this.getModFile(mod);
+		const url = await this.getUrl(mod, modFile);
 
-		// TODO: remove old mod
+		const writer = fs.createWriteStream(modFile.projectFileName);
+		const download = await axios.get(url, { responseType: 'stream' });
+		download.data.pipe(writer);
+
+		return new Promise((resolve, reject) => {
+			writer
+				.on('finish', resolve)
+				.on('error', reject);
+		});
+	}
+
+	getModFile(mod: Mod): ModFile {
+		return mod.gameVersionLatestFiles.find(({ gameVersion }) => gameVersion === this.version);
+	}
+
+	async getUrl(mod: Mod, modFile: ModFile): Promise<string> {
+		const res = await this.curse.get(`/addon/${mod.id}/file/${modFile.projectFileId}`);
+		return res.data.downloadUrl;
 	}
 
 	async run() {
@@ -114,7 +160,6 @@ export default class Emcee {
 				console.error(''+ex);
 				throw ex;
 			}
-			return;
 		}
 	}
 }
