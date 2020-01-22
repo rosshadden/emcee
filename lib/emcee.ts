@@ -83,10 +83,10 @@ export default class Emcee {
 	async process(file: string) {
 		console.log(`processing ${file}`);
 
-		console.log('getting mod info');
+		console.log('\tgetting mod info');
 		const modInfo: ModInfo = await this.exec(`unzip -p ${file} mcmod.info`);
 
-		console.log(`searching for ${modInfo.name}`);
+		console.log(`\tsearching for ${modInfo.name}`);
 		const res = await this.curse.get('/addon/search', {
 			headers: {
 				'Content-Type': 'application/x-www-form-urlencoded',
@@ -116,24 +116,31 @@ export default class Emcee {
 			);
 		});
 
-		console.log('finding filename match');
+		console.log('\tfinding filename match');
 		const mod = this.findMatch(results, file);
 		if (!mod) throw new Error(`No match found for ${file}`);
 
+		const modFile = this.getModFile(mod);
+		if (modFile.projectFileName === file) {
+			console.log(`\tskipping already updated file ${file}`);
+			return;
+		}
+
 		// download mod
-		await this.downloadMod(mod);
+		await this.downloadMod(mod, modFile);
 
 		// remove old mod
 		await fsp.unlink(file);
 	}
 
-	async downloadMod(mod: Mod): Promise<void> {
-		const modFile = this.getModFile(mod);
+	async downloadMod(mod: Mod, modFile: ModFile): Promise<void> {
 		const url = await this.getUrl(mod, modFile);
 
-		console.log(`downloading ${url} to ${modFile.projectFileName}`);
+		console.log(`\tdownloading ${url}`);
 		const writer = fs.createWriteStream(modFile.projectFileName);
 		const download = await axios.get(url, { responseType: 'stream' });
+
+		console.log(`\tsaving to ${modFile.projectFileName}`);
 		download.data.pipe(writer);
 
 		return new Promise((resolve, reject) => {
@@ -148,7 +155,7 @@ export default class Emcee {
 	}
 
 	async getUrl(mod: Mod, modFile: ModFile): Promise<string> {
-		console.log('getting mod file url');
+		console.log('\tgetting mod file url');
 		const res = await this.curse.get(`/addon/${mod.id}/file/${modFile.projectFileId}`);
 		return res.data.downloadUrl;
 	}
