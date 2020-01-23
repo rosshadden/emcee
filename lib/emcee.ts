@@ -73,7 +73,13 @@ export default class Emcee {
 				.on('data', (data) => chunks += data)
 				.on('close', (code: number) => {
 					if (code) reject(code);
-					resolve(JSON.parse(chunks)[0]);
+					try {
+						let data = JSON.parse(chunks);
+						if (!Array.isArray(data)) data = data.modList;
+						resolve(data[0]);
+					} catch (ex) {
+						reject(ex);
+					}
 				})
 				.on('error', reject)
 			;
@@ -84,7 +90,12 @@ export default class Emcee {
 		console.log(`processing ${file}`);
 
 		console.log('\tgetting mod info');
-		const modInfo: ModInfo = await this.exec(`unzip -p ${file} mcmod.info`);
+		let modInfo: ModInfo;
+		try {
+			modInfo = await this.exec(`unzip -p ${file} mcmod.info`);
+		} catch (ex) {
+			return console.error(`\tno manifest found in ${file}`);
+		}
 
 		console.log(`\tsearching for ${modInfo.name}`);
 		const res = await this.curse.get('/addon/search', {
@@ -118,18 +129,18 @@ export default class Emcee {
 
 		console.log('\tfinding filename match');
 		const mod = this.findMatch(results, file);
-		if (!mod) throw new Error(`No match found for ${file}`);
+		if (!mod) return console.error(`\tno match found for ${file}`);
 
 		const modFile = this.getModFile(mod);
 		if (modFile.projectFileName === file) {
-			console.log(`\tskipping already updated file ${file}`);
-			return;
+			return console.log(`\tskipping already updated file ${file}`);
 		}
 
 		// download mod
 		await this.downloadMod(mod, modFile);
 
 		// remove old mod
+		console.log(`\tdeleting old mod ${file}`);
 		await fsp.unlink(file);
 	}
 
